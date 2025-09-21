@@ -2,121 +2,89 @@ export const config = {
     runtime: 'edge',
 };
 
-export default async function handler(req) {
-    if (req.method !== 'POST') {
+// این تابع به عنوان سرور امن شما عمل می‌کند
+export default async function handler(request) {
+    // --- بخش جدید: اضافه کردن هدرهای CORS ---
+    // این هدرها به مرورگر اجازه می‌دهند تا از دامنه‌های دیگر به این API دسترسی داشته باشد
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': '*', // به همه دامنه‌ها اجازه می‌دهد. برای امنیت بیشتر می‌توانید 'https://lockposht.com' را جایگزین کنید
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+    };
+
+    // مرورگرها قبل از ارسال درخواست اصلی، یک درخواست اولیه به نام OPTIONS می‌فرستند
+    // این بخش به آن درخواست اولیه پاسخ مثبت می‌دهد
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: corsHeaders });
+    }
+    // --- پایان بخش جدید ---
+
+
+    // بررسی می‌کند که درخواست از نوع POST باشد
+    if (request.method !== 'POST') {
         return new Response(JSON.stringify({ error: 'Method not allowed' }), {
             status: 405,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
 
     try {
-        const { imageData, imageType, userPrompt, originalDimensions } = await req.json();
+        const { image, prompt, mimeType } = await request.json();
         const apiKey = process.env.GOOGLE_API_KEY;
 
         if (!apiKey) {
-            return new Response(JSON.stringify({ error: 'API key is not configured on the server.' }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            throw new Error("کلید API گوگل در سرور تنظیم نشده است.");
         }
-
-        const prompt = `شما یک تحلیلگر حرفه‌ای بازارهای مالی هستید. وظیفه شما تحلیل تکنیکال نموداری است که کاربر ارسال می‌کند و ارائه یک تحلیل متنی و مجموعه‌ای از دستورالعمل‌ها برای رسم تحلیل روی تصویر است.
-        پاسخ شما باید فقط و فقط یک آبجکت JSON معتبر باشد. هیچ متن اضافی، توضیحات یا فرمت markdown خارج از آبجکت JSON قرار ندهید.
-
-        ساختار JSON باید به این صورت باشد:
-        {
-          "analysisText": "تحلیل متنی شما در اینجا...",
-          "annotations": [
-            { "type": "line", "color": "red", "startX": 100, "startY": 50, "endX": 800, "endY": 50 },
-            { "type": "text", "color": "white", "x": 450, "y": 70, "text": "Resistance Level" }
-          ]
-        }
-
-        **دستورالعمل تحلیل متنی:**
-        تحلیل شما باید دقیق و بی‌طرفانه باشد و شامل:
-        1.  **روند فعلی**: صعودی، نزولی یا خنثی.
-        2.  **سطوح کلیدی**: مهم‌ترین سطوح حمایت و مقاومت.
-        3.  **الگوها**: الگوهای قیمتی یا شمعی مهم.
-        4.  **نتیجه‌گیری و سیگنال**: سیگنال واضح برای خرید (Buy)، فروش (Sell) یا انتظار (Wait).
         
-        **دستورالعمل تحلیل تصویری (Annotations):**
-        مجموعه‌ای از آبجکت‌ها را برای رسم روی نمودار ارائه دهید. مختصات باید بر اساس ابعاد تصویر اصلی (w: ${originalDimensions.w}, h: ${originalDimensions.h}) باشد.
-        - برای خطوط (حمایت، مقاومت، روند): از نوع 'line' با رنگ 'green' برای حمایت و 'red' برای مقاومت استفاده کنید.
-        - برای نوشتن متن روی نمودار: از نوع 'text' با رنگ 'white' یا 'yellow' استفاده کنید.
-        - برای هایلایت کردن یک ناحیه: از نوع 'rect' با رنگ 'rgba(255, 255, 0, 0.2)' (زرد نیمه‌شفاف) استفاده کنید.
-        
-        متن کاربر: "${userPrompt}"`;
+        const systemPrompt = `You are an expert technical analyst for financial markets. Your task is to analyze the user-provided chart image. First, provide a concise, actionable text analysis in PERSIAN based on the user's prompt. The analysis should identify key levels (support, resistance), trends, and potential trading signals (buy, sell, hold). Second, provide a JSON array of annotations to be drawn on the chart. The coordinate system is 1000x1000. Available annotation types are 'line', 'rect', and 'text'. You MUST return ONLY a valid JSON object with the following structure, without any markdown formatting: {"analysisText": "...", "annotations": [{"type": "line", "start": {"x":..., "y":...}, "end": {"x":..., "y":...}, "color": "yellow"}, ...]}`;
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
         const payload = {
-            contents: [{
-                parts: [
-                    { text: prompt },
-                    { inlineData: { mimeType: imageType, data: imageData } }
-                ]
-            }]
+            contents: [
+                {
+                    parts: [
+                        { text: systemPrompt },
+                        { text: `User request: ${prompt}` },
+                        {
+                            inline_data: {
+                                mime_type: mimeType,
+                                data: image
+                            }
+                        }
+                    ]
+                }
+            ]
         };
+        
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
-        const googleResponse = await fetch(apiUrl, {
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(payload)
         });
 
-        const rawResponseText = await googleResponse.text();
-        
-        if (!googleResponse.ok) {
-            console.error("Google API Error:", rawResponseText);
-            return new Response(JSON.stringify({ error: `خطا از سرور گوگل: ${googleResponse.statusText}` }), {
-                status: googleResponse.status,
-                headers: { 'Content-Type': 'application/json' },
-            });
-        }
-        
-        const result = JSON.parse(rawResponseText);
-        const part = result.candidates?.[0]?.content?.parts?.[0];
-
-        if (!part || !part.text) {
-             console.error("Unexpected API response structure:", rawResponseText);
-             return new Response(JSON.stringify({ error: "ساختار پاسخ دریافتی از گوگل نامعتبر است." }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' },
-            });
+        if (!response.ok) {
+            const errorBody = await response.json();
+            console.error("Google API Error:", errorBody);
+            throw new Error(`Google API Error: ${errorBody.error.message}`);
         }
 
-        let jsonText = part.text;
+        const data = await response.json();
+        const textResponse = data.candidates[0].content.parts[0].text;
         
-        if (jsonText.includes("```json")) {
-            jsonText = jsonText.split("```json")[1].split("```")[0];
-        }
-        
-        const firstBrace = jsonText.indexOf('{');
-        const lastBrace = jsonText.lastIndexOf('}');
-        
-        if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-            console.error("Could not find valid JSON object in text:", jsonText);
-            return new Response(JSON.stringify({ error: "پاسخ دریافتی فرمت JSON معتبر نداشت." }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' },
-            });
-        }
-        
-        jsonText = jsonText.substring(firstBrace, lastBrace + 1);
-
-        // اعتبارسنجی نهایی JSON قبل از ارسال به کاربر
-        JSON.parse(jsonText);
-
-        return new Response(jsonText, {
+        // پاسخ نهایی را به همراه هدرهای CORS به کاربر برمی‌گرداند
+        return new Response(textResponse, {
             status: 200,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
     } catch (error) {
-        console.error("Server Error:", error);
-        return new Response(JSON.stringify({ error: 'یک خطای داخلی در سرور رخ داد.' }), {
+        console.error('Server error:', error);
+        // در صورت بروز خطا، آن را به همراه هدرهای CORS برمی‌گرداند
+        return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
     }
 }
+
