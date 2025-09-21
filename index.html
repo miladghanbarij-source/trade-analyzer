@@ -42,17 +42,6 @@
         </div>
 
         <div>
-            <label for="api-key-input" class="block text-lg font-medium text-green-100">کلید API گوگل (Google AI API Key)</label>
-            <div class="mt-2 flex items-center space-x-2 space-x-reverse">
-                <input type="password" id="api-key-input" class="block w-full bg-white/10 border border-green-300 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-green-400 sm:text-sm" placeholder="کلید خود را اینجا وارد کنید">
-                <button id="save-api-key-button" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex-shrink-0">ذخیره</button>
-            </div>
-            <p class="text-xs text-green-300 mt-1">کلید شما فقط در مرورگر شما ذخیره می‌شود. برای دریافت کلید رایگان به <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline hover:text-green-100">Google AI Studio</a> مراجعه کنید.</p>
-        </div>
-
-        <hr class="border-green-700/50">
-
-        <div>
             <label for="chart-image" class="block text-lg font-medium text-green-100 mb-2">۱. آپلود تصویر نمودار</label>
             <div id="drop-zone" class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-green-300 border-dashed rounded-md cursor-pointer hover:border-green-400 transition-colors">
                 <div class="space-y-1 text-center">
@@ -71,7 +60,7 @@
 
         <div>
             <button id="analyze-button" class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105 disabled:bg-gray-500 disabled:cursor-not-allowed">
-                <svg id="button-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <svg id="button-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 <span id="button-text">تحلیل کن</span>
             </button>
         </div>
@@ -111,32 +100,11 @@
         const resultCanvas = document.getElementById('result-canvas');
         const imagePlaceholder = document.getElementById('image-placeholder');
         const imageResultContainer = document.getElementById('image-result-container');
-        const apiKeyInput = document.getElementById('api-key-input');
-        const saveApiKeyButton = document.getElementById('save-api-key-button');
 
         let imageFile = null;
         let originalImageDimensions = { w: 0, h: 0 };
         let lastAnalysisData = null; // Store last successful analysis
         
-        // --- API Key Logic ---
-        window.addEventListener('load', () => {
-            const savedKey = localStorage.getItem('googleApiKey');
-            if (savedKey) {
-                apiKeyInput.value = savedKey;
-            }
-        });
-
-        saveApiKeyButton.addEventListener('click', () => {
-            const key = apiKeyInput.value.trim();
-            if (key) {
-                localStorage.setItem('googleApiKey', key);
-                alert('کلید API با موفقیت ذخیره شد.');
-            } else {
-                localStorage.removeItem('googleApiKey');
-                alert('کلید API پاک شد.');
-            }
-        });
-
         dropZone.addEventListener('click', () => imageInput.click());
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-green-400', 'bg-white/20'); });
         dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-green-400', 'bg-white/20'); });
@@ -177,11 +145,13 @@
         }
 
         analyzeButton.addEventListener('click', async () => {
-            const apiKey = localStorage.getItem('googleApiKey');
+            const apiKey = "AIzaSyCMsMuif2wapSzS8Ahg0e6dEA_RN13iwzw"; 
+            
             if (!apiKey) {
-                showError("کلید API گوگل تنظیم نشده است. لطفاً کلید خود را در کادر مربوطه وارد و ذخیره کنید.");
+                showError("کلید API در کد منبع تنظیم نشده است.");
                 return;
             }
+
             if (!imageFile || !userPrompt.value.trim()) {
                 showError("لطفاً هم تصویر نمودار را آپلود کنید و هم درخواست تحلیل خود را بنویسید.");
                 return;
@@ -257,7 +227,7 @@
                 }
                 
                 const result = JSON.parse(rawResponseText);
-                const part = result.candidates?.[0]?.content?.parts?.[0];
+                const part = result.candidates?.[0]?.content?.parts?[0];
 
                 if (!part || !part.text) {
                     console.error("Unexpected API response structure:", rawResponseText);
