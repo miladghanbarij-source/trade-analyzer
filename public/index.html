@@ -146,31 +146,23 @@
     }
     
     function cleanJsonString(str) {
-        // Find the first '{' and the last '}'
         const firstBrace = str.indexOf('{');
         const lastBrace = str.lastIndexOf('}');
-
-        if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-            return null; // Not a valid JSON structure
-        }
-
+        if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) return null;
         return str.substring(firstBrace, lastBrace + 1);
     }
     
     async function analyzeChart() {
         if (!uploadedFile || !promptText.value.trim()) return;
 
-        // Start loading state
         setLoading(true);
         errorBox.classList.add('hidden');
         resultsSection.classList.remove('hidden');
         imagePlaceholder.textContent = "در حال پردازش تصویر...";
         textResult.innerHTML = '<p class="text-gray-400">در حال تولید تحلیل متنی...</p>';
         
-        // Clear previous canvas drawings
         const canvasCtx = analysisCanvas.getContext('2d');
         canvasCtx.clearRect(0, 0, analysisCanvas.width, analysisCanvas.height);
-
 
         try {
             const base64Image = await toBase64(uploadedFile);
@@ -181,9 +173,8 @@
                 mimeType: uploadedFile.type
             };
 
-            // --- تغییر اصلی: استفاده از آدرس کامل (مطلق) به جای آدرس نسبی ---
-            const response = await fetch('https://trade-analyzer-seven.vercel.app/api/analyze', {
-            // const response = await fetch('/api/analyze', { // <-- این خط مشکل‌ساز بود
+            // --- آدرس API به نسخه جدید و صحیح به‌روز شد ---
+            const response = await fetch('https://trade-analyzer-brown.vercel.app/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -206,8 +197,8 @@
             if (!data.analysisText || !data.annotations) {
                  throw new Error("پاسخ JSON فاقد کلیدهای ضروری analysisText یا annotations است.");
             }
-
-            // Display results
+            
+            textResult.dataset.annotations = JSON.stringify(data.annotations);
             displayResults(data.analysisText, data.annotations);
 
         } catch (error) {
@@ -220,30 +211,19 @@
     }
 
     function displayResults(analysis, annotations) {
-        // Display text
         textResult.textContent = analysis;
-        
-        // Display image and draw annotations
         imagePlaceholder.classList.add('hidden');
         imageResult.src = imagePreview.src;
         imageResult.classList.remove('hidden');
 
-        // Wait for image to load before drawing on canvas
-        imageResult.onload = () => {
-            drawAnnotations(annotations);
-        };
-        // If image is already cached/loaded, draw immediately
-        if (imageResult.complete) {
-            drawAnnotations(annotations);
-        }
+        imageResult.onload = () => drawAnnotations(annotations);
+        if (imageResult.complete) drawAnnotations(annotations);
     }
 
     function drawAnnotations(annotations) {
         const canvas = analysisCanvas;
         const ctx = canvas.getContext('2d');
-        
         const img = imageResult;
-        // Match canvas resolution to the displayed image size for accurate drawing
         canvas.width = img.clientWidth;
         canvas.height = img.clientHeight;
 
@@ -272,7 +252,6 @@
         });
     }
 
-
     function setLoading(isLoading) {
         if (isLoading) {
             analyzeButton.disabled = true;
@@ -294,38 +273,17 @@
     }
 
     // --- Event Listeners ---
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, e => {
-            e.preventDefault();
-            e.stopPropagation();
-        }, false);
-    });
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.add('border-emerald-400'), false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-emerald-400'), false);
-    });
-
-    dropZone.addEventListener('drop', e => {
-        handleFiles(e.dataTransfer.files);
-    });
-    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false));
+    ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.add('border-emerald-400'), false));
+    ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-emerald-400'), false));
+    dropZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
     dropZone.addEventListener('click', () => fileInput.click());
-
-    fileInput.addEventListener('change', e => {
-        handleFiles(e.target.files);
-    });
-
+    fileInput.addEventListener('change', e => handleFiles(e.target.files));
     promptText.addEventListener('input', validateInputs);
     analyzeButton.addEventListener('click', analyzeChart);
     
-    // Redraw canvas on window resize to keep annotations aligned
     window.addEventListener('resize', () => {
         if (!imageResult.classList.contains('hidden')) {
-            // A small delay to allow layout to settle before redrawing
             setTimeout(() => {
                 const annotations = JSON.parse(textResult.dataset.annotations || '[]');
                 drawAnnotations(annotations);
@@ -336,3 +294,4 @@
 </script>
 </body>
 </html>
+
