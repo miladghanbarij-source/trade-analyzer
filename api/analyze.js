@@ -4,23 +4,27 @@ export const config = {
 
 // این تابع به عنوان سرور امن شما عمل می‌کند
 export default async function handler(request) {
-    // --- بخش جدید: اضافه کردن هدرهای CORS ---
-    // این هدرها به مرورگر اجازه می‌دهند تا از دامنه‌های دیگر به این API دسترسی داشته باشد
+    // --- بخش بهبود یافته: مدیریت هوشمند CORS برای دامنه‌های مجاز ---
+    const allowedOrigins = [
+        'https://trade-analyzer-brown.vercel.app', 
+        'https://lockposht.com'
+    ];
+    const origin = request.headers.get('origin');
+    // اگر دامنه درخواست‌کننده در لیست مجاز باشد، به آن اجازه دسترسی داده می‌شود
+    const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+
     const corsHeaders = {
-        'Access-Control-Allow-Origin': '*', // به همه دامنه‌ها اجازه می‌دهد. برای امنیت بیشتر می‌توانید 'https://lockposht.com' را جایگزین کنید
+        'Access-Control-Allow-Origin': corsOrigin,
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
+        'Vary': 'Origin', // برای مدیریت صحیح کش توسط مرورگر
     };
 
-    // مرورگرها قبل از ارسال درخواست اصلی، یک درخواست اولیه به نام OPTIONS می‌فرستند
-    // این بخش به آن درخواست اولیه پاسخ مثبت می‌دهد
     if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: corsHeaders });
     }
-    // --- پایان بخش جدید ---
+    // --- پایان بخش بهبود یافته ---
 
-
-    // بررسی می‌کند که درخواست از نوع POST باشد
     if (request.method !== 'POST') {
         return new Response(JSON.stringify({ error: 'Method not allowed' }), {
             status: 405,
@@ -72,7 +76,6 @@ export default async function handler(request) {
         const data = await response.json();
         const textResponse = data.candidates[0].content.parts[0].text;
         
-        // پاسخ نهایی را به همراه هدرهای CORS به کاربر برمی‌گرداند
         return new Response(textResponse, {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -80,7 +83,6 @@ export default async function handler(request) {
 
     } catch (error) {
         console.error('Server error:', error);
-        // در صورت بروز خطا، آن را به همراه هدرهای CORS برمی‌گرداند
         return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
