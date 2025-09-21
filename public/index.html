@@ -59,7 +59,7 @@
                 </div>
                 <button id="analyze-button" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105 duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed" disabled>
                     <svg id="button-icon" class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 D 000-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                     </svg>
                     <svg id="loading-spinner" class="animate-spin h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -145,13 +145,6 @@
         analyzeButton.disabled = !(uploadedFile && promptText.value.trim().length > 0);
     }
     
-    function cleanJsonString(str) {
-        const firstBrace = str.indexOf('{');
-        const lastBrace = str.lastIndexOf('}');
-        if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) return null;
-        return str.substring(firstBrace, lastBrace + 1);
-    }
-    
     async function analyzeChart() {
         if (!uploadedFile || !promptText.value.trim()) return;
 
@@ -179,23 +172,18 @@
                 body: JSON.stringify(payload)
             });
 
-            // --- بخش جدید: مدیریت هوشمند و قوی‌تر خطا ---
             const responseText = await response.text();
             let data;
             
-            // ابتدا سعی می‌کنیم پاسخ را به عنوان JSON پردازش کنیم
             try {
                 data = JSON.parse(responseText);
             } catch (jsonError) {
-                // اگر پاسخ JSON نبود، یعنی یک خطای متنی از سرور دریافت شده است
                 throw new Error(responseText || "پاسخ نامعتبر از سرور دریافت شد.");
             }
 
-            // اگر پاسخ JSON بود اما وضعیت خطا داشت، پیام خطا را نمایش می‌دهیم
             if (!response.ok) {
                 throw new Error(data.error || `خطای سرور با کد: ${response.status}`);
             }
-            // --- پایان بخش جدید ---
 
             if (!data.analysisText || !data.annotations) {
                  throw new Error("پاسخ JSON فاقد کلیدهای ضروری analysisText یا annotations است.");
@@ -223,10 +211,15 @@
         if (imageResult.complete) drawAnnotations(annotations);
     }
 
+    // --- تابع بهبود یافته برای رسم با مدیریت خطا ---
     function drawAnnotations(annotations) {
         const canvas = analysisCanvas;
         const ctx = canvas.getContext('2d');
         const img = imageResult;
+        
+        // جلوگیری از خطا اگر تصویر هنوز آماده نباشد
+        if (!img.clientWidth || !img.clientHeight) return;
+
         canvas.width = img.clientWidth;
         canvas.height = img.clientHeight;
 
@@ -235,19 +228,31 @@
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        if (!Array.isArray(annotations)) {
+            console.error("Annotations is not an array:", annotations);
+            return;
+        }
+
         annotations.forEach(ann => {
-            if (ann.type === 'line') {
+            if (!ann || typeof ann !== 'object') return; // نادیده گرفتن دستورات نامعتبر
+
+            // بررسی دقیق برای دستور رسم خط
+            if (ann.type === 'line' && ann.start && ann.end && ann.start.x != null && ann.start.y != null && ann.end.x != null && ann.end.y != null) {
                 ctx.beginPath();
                 ctx.moveTo(ann.start.x * scaleX, ann.start.y * scaleY);
                 ctx.lineTo(ann.end.x * scaleX, ann.end.y * scaleY);
                 ctx.strokeStyle = ann.color || 'yellow';
                 ctx.lineWidth = 2;
                 ctx.stroke();
-            } else if (ann.type === 'text') {
+            } 
+            // بررسی دقیق برای دستور رسم متن
+            else if (ann.type === 'text' && ann.position && ann.label && ann.position.x != null && ann.position.y != null) {
                 ctx.fillStyle = ann.color || 'yellow';
                 ctx.font = `${14 * Math.min(scaleX, scaleY)}px Vazirmatn`;
                 ctx.fillText(ann.label, ann.position.x * scaleX, ann.position.y * scaleY);
-            } else if (ann.type === 'rect') {
+            } 
+            // بررسی دقیق برای دستور رسم مستطیل
+            else if (ann.type === 'rect' && ann.start && ann.end && ann.start.x != null && ann.start.y != null && ann.end.x != null && ann.end.y != null) {
                 ctx.strokeStyle = ann.color || 'cyan';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(ann.start.x * scaleX, ann.start.y * scaleY, (ann.end.x - ann.start.x) * scaleX, (ann.end.y - ann.start.y) * scaleY);
