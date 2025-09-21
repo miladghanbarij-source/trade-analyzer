@@ -1,39 +1,33 @@
-export const config = {
-    runtime: 'edge',
-};
+// --- بخش جدید: افزایش مهلت زمانی اجرای تابع به ۴۵ ثانیه ---
+export const maxDuration = 45; 
 
 // این تابع به عنوان سرور امن شما عمل می‌کند
-export default async function handler(request) {
+export default async function handler(request, response) {
     // --- بخش بهبود یافته: مدیریت هوشمند CORS برای دامنه‌های مجاز ---
     const allowedOrigins = [
         'https://trade-analyzer-brown.vercel.app', 
         'https://lockposht.com'
     ];
-    const origin = request.headers.get('origin');
-    // اگر دامنه درخواست‌کننده در لیست مجاز باشد، به آن اجازه دسترسی داده می‌شود
+    const origin = request.headers.origin;
     const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
 
-    const corsHeaders = {
-        'Access-Control-Allow-Origin': corsOrigin,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Vary': 'Origin', // برای مدیریت صحیح کش توسط مرورگر
-    };
+    response.setHeader('Access-Control-Allow-Origin', corsOrigin);
+    response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    response.setHeader('Vary', 'Origin');
 
     if (request.method === 'OPTIONS') {
-        return new Response(null, { status: 204, headers: corsHeaders });
+        return response.status(204).end();
     }
     // --- پایان بخش بهبود یافته ---
 
     if (request.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return response.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
-        const { image, prompt, mimeType } = await request.json();
+        // در نود جی‌اس، بدنه درخواست به صورت request.body در دسترس است
+        const { image, prompt, mimeType } = request.body;
         const apiKey = process.env.GOOGLE_API_KEY;
 
         if (!apiKey) {
@@ -61,32 +55,27 @@ export default async function handler(request) {
         
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
-        const response = await fetch(apiUrl, {
+        const apiResponse = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        if (!response.ok) {
-            const errorBody = await response.json();
+        if (!apiResponse.ok) {
+            const errorBody = await apiResponse.json();
             console.error("Google API Error:", errorBody);
             throw new Error(`Google API Error: ${errorBody.error.message}`);
         }
 
-        const data = await response.json();
+        const data = await apiResponse.json();
         const textResponse = data.candidates[0].content.parts[0].text;
         
-        return new Response(textResponse, {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        // پاسخ موفقیت‌آمیز را به صورت JSON ارسال می‌کنیم
+        return response.status(200).send(textResponse);
 
     } catch (error) {
         console.error('Server error:', error);
-        return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return response.status(500).json({ error: error.message });
     }
 }
 
